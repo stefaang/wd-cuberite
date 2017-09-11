@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name" translatable="false">Cuberite</string>
+
+    <string name="status_download_error">Download error: </string>
+    <string name="status_delete_file_error">Something went wrong: Couldn\'t delete file</string>
+    <!-- yet unused -->
+
+    <string name="notification_cuberite_running">Cuberite is running!</string>
+
+    <string name="service_description">This service runs Cuberite and ensures that it is not killed by the system.</string>
+    <string name="installservice_description">This service downloads, unzips and installs Cuberite.</string>
+
+    <!-- Do not translate %1$s, its the placeholder for the ABI -->
+
+</resources>

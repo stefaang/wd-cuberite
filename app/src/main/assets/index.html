@@ -1,0 +1,178 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <style>
+.container {
+    max-width: 40em;
+}
+#mainbox {
+    text-align: center;
+}
+#logbox {
+    min-height: 20em;
+    max-height: 20em;
+    overflow-y: scroll;
+}
+.btn {
+    min-height: 65px;
+}
+    </style>
+</head>
+<body onload="getStatus()">
+<div class="container">
+    <div class="jumbotron" id="mainbox">
+        <h1 class="display-3">Cuberite</h1>
+        <p class="help">An open source C++ Minecraft server</p>
+            <button class="btn btn-primary btn-block" id="cfg-btn" type="button" name="action">Configure</button>
+            <button class="btn btn-success btn-block" id="install-btn" type="button" name="action">Install</button>
+            <button class="btn btn-info btn-block" id="start-btn" type="button" name="action">Start</button>
+            <button class="btn btn-warning btn-block" id="stop-btn" type="button" name="action">Stop</button>
+            <button class="btn btn-danger btn-block" id="update-btn" type="button" name="action">Update</button>
+        <h2 class="display-4">Server IP ###IP_ADDRESS###</h2>
+    </div>
+    <div class="progress">
+        <div class="progress-bar" role="progressbar" aria-valuenow="0"
+             aria-valuemin="0" aria-valuemax="100" style="width:0%">
+            <span class="sr-only">0% Complete</span>
+        </div>
+    </div>
+    <div class="panel panel-primary" hidden>
+        <div class="panel-heading">Console log</div>
+        <div class="panel-body fixed-panel" id="logbox"></div>
+    </div>
+    <p>Default web admin credentials: admin - admin</p>
+    <p><a href="https://cuberite.org/getting-started/">Getting started</a> with Cuberite</p>
+</div>
+
+<script>
+
+var currentStatus = "NOT_INSTALLED";
+var progressbarId = null;
+
+function getStatus() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('get', './status');
+    xhr.onload = function(){
+        var newStatus = xhr.responseText;
+        console.log(newStatus);
+        var btns, btn;
+        if (currentStatus != newStatus) {
+            if (progressbarId) clearInterval(progressbarId);
+            $('.progress-bar').css('width', 0).attr('aria-valuenow', 0);
+            currentStatus = newStatus;
+        }
+        switch(newStatus) {
+            case "NOT_INSTALLED":
+                btns = {'cfg': 0, 'install': 1, 'start': 0, 'stop': 0, 'update': 0};
+                $(".progress").show();
+                break;
+            case "OK":
+                btns = {'cfg': 0, 'install': 0, 'start': 1, 'stop': 0, 'update': 1};
+                $(".progress").show();
+                break;
+            case "RUNNING":
+                btns = {'cfg': 1, 'install': 0, 'start': 0, 'stop': 1, 'update': 0};
+                setTimeout(getLogs, 1000);
+                $(".progress").hide();
+                $(".panel").show();
+                break;
+            default:
+                console.log("Invalid status: " + rtext);
+                $(".progress").show();
+                return
+        }
+        for (btn in btns) {
+            if (btns[btn])
+                $("#" + btn + "-btn").show();
+            else
+                $("#" + btn + "-btn").hide();
+        }
+
+    }
+    xhr.send();
+}
+var statusId = setInterval(getStatus, 5000);
+
+function sendForm(action) {
+    var xhr = new XMLHttpRequest();
+    var redirect = document.cookie.split(';');
+    var redirectIp = getQueryString("redirect-ip", window.location.href);
+    console.log(document.cookie);
+    console.log(redirectIp);
+    xhr.open('post', redirectIp + "?action=" + action, true);
+    xhr.withCredentials = true;
+
+    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhr.send();
+}
+
+function getQueryString(search, str) {
+    // use this to parse params from the URL
+    var reg = new RegExp('[?&]*' + search + '=([^&#]*)', 'i'),
+        string = reg.exec(str);
+    return string ? string[1] : null;
+}
+
+$('.btn').click(function(e) {
+    var action = e.target.innerText;
+    console.log("Clicked action: " + action);
+    if (action == "Configure") {
+        launchWebAdmin();
+    } else {
+        // uncomment this when debugging
+        //clearInterval(statusId);
+        sendForm(action);
+
+        if (action == "Upgrade") {
+            currentStatus = "NOT_INSTALLED";
+        }
+        progressbarId = animateProgressbar(2000);
+    }
+});
+
+function animateProgressbar(duration) {
+    if (!duration) return null;
+    var p = 0,
+        step = 100 * 100 / duration,        // 100 pct * 100 ms
+        loadingId = setInterval(function() {
+            p = p + step;
+            // knight rider flip
+            step = (p % 100 == 0)? -step : step;
+            $('.progress-bar').css('width', p + '%').attr('aria-valuenow', p);
+    }, 100);
+    return loadingId;
+}
+
+function launchWebAdmin() {
+    // redirect to Cuberite web admin interface by replace in UI server
+    var timeout = 2000,
+        id = animateProgressbar(timeout);
+    setTimeout(function() {
+        document.location.href = "http://###IP_ADDRESS###:8080";
+        //clearInterval(id);
+    }, timeout);
+}
+
+function getLogs() {
+    var xhr = new XMLHttpRequest();
+        xhr.open('get', './logs');
+        xhr.onload = function(){
+            var newLogs = xhr.responseText;
+            if (newLogs) {
+                console.log(newLogs);
+                $("#logbox").append(newLogs).scrollTop(function() { return this.scrollHeight; });
+            }
+        }
+    xhr.send();
+}
+
+
+</script>
+
+</body>
+</html>
