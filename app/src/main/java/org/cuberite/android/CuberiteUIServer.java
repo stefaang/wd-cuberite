@@ -20,6 +20,9 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -72,74 +75,60 @@ public class CuberiteUIServer extends MyCloudUIServer {
     /**
      * This get method serve as the landing screen for this application.
      *
-     * @param ihttpSession
+     * @param session
      * @return Response
      */
     @Override
-    public Response get(IHTTPSession ihttpSession) {
-        String token = getAccessToken(ihttpSession); //Get access token
-        String baseUrl = getBaseUrl(ihttpSession); // get base url for further calls
-        String uri = ihttpSession.getUri();
+    public Response get(IHTTPSession session) {
+        String token = getAccessToken(session); //Get access token
+        String baseUrl = getBaseUrl(session); // get base url for further calls
+        String uri = session.getUri();
 
         Log.d(TAG, "##### base URL:" + baseUrl);
         if (uri != null) {
             if (uri.endsWith("status")) {
                 // return the current status
                 String response = checkState();
-                return makeResponse(response);
+                return newFixedLengthResponse(response);
             } else if (uri.endsWith("logs")) {
                 // return the latest log lines
                 String response = serviceLogs;
                 // clear the logs
                 serviceLogs = "";
-                return makeResponse(response);
+                return newFixedLengthResponse(response);
             }
         }
         // else update the Public Dir and return the main index.html page
-        Log.d(TAG, "Set RootFolder: "+getMyCloudUserId(ihttpSession));
-        PUBLIC_DIR = getRootFolder(mContext, getMyCloudUserId(ihttpSession));
-        Response response = makeResponse(getViewSource());
-        if (ihttpSession.getParms() != null && ihttpSession.getParms().containsKey(ACCESS_TOKEN_NAME)) {
-            final NanoHTTPD.CookieHandler cookieHandler = new NanoHTTPD.CookieHandler(ihttpSession.getHeaders());
+        Log.d(TAG, "Set RootFolder: "+getMyCloudUserId(session));
+        PUBLIC_DIR = getRootFolder(mContext, getMyCloudUserId(session));
 
-            cookieHandler.set(ACCESS_TOKEN_NAME, ihttpSession.getParms().get(ACCESS_TOKEN_NAME),
-                    COOKIE_EXPIRATION_PERIOD_DAYS);
-
+        Response response = newFixedLengthResponse(getViewSource(session));
+        if (token != null) {
+            Log.d(TAG, "Set cookies for token " + token);
+            final NanoHTTPD.CookieHandler cookieHandler = new NanoHTTPD.CookieHandler(session.getHeaders());
+            cookieHandler.set(ACCESS_TOKEN_NAME, token, COOKIE_EXPIRATION_PERIOD_DAYS);
             cookieHandler.unloadQueue(response);
+            String setCookieHeader = response.getHeader("Set-Cookie");
+            Log.d(TAG, "Cookie Header: " + setCookieHeader);
         }
         return response;
     }
 
     /**
      * The post method to serve users post requests. Anything UI want to send for backend service should ideally use post.
-     * @param ihttpSession
+     * @param session
      * @return
      */
+
     @Override
-    public Response post(IHTTPSession ihttpSession) {
-        String myclouduserid = getMyCloudUserId(ihttpSession);
-        Log.d(TAG, "Got POST from user " + myclouduserid);
-        PUBLIC_DIR = getRootFolder(mContext, myclouduserid);
-        // initialize again to fetch new permissions and setup proper PUBLIC_DIR
-        initializeSettings(mContext, PUBLIC_DIR);
-
+    public Response post(IHTTPSession session) {
         try{
-            String postBody = ihttpSession.getQueryParameterString();
+            String postBody = session.getQueryParameterString();
+            Map<String, List<String>> postParams = session.getParameters();
+            Log.d(TAG, "##### Post Body: " + postBody);
+            Log.d(TAG, "##### Post Parameters: " + postParams);
+            String action = postParams.get("action").get(0);
 
-            Log.d(TAG, "##### Post Body:" + postBody);
-            String action = null;
-
-			// This is to get folder name from HTML Form data
-            String[] keyValues = postBody.split("=");
-            if (keyValues != null){
-                String key = keyValues[0];
-                if (key.equals("action")){
-                    action = keyValues[1];
-                    // workaround for chunked upload bug
-                    action = (action.contains("\n"))? action.substring(0, action.indexOf('\r')) : action;
-                    Log.d(TAG, "##### POST Action:" + action);
-                }
-            }
             switch (action) {
                 case "Download":
                 case "Install":
@@ -171,13 +160,17 @@ public class CuberiteUIServer extends MyCloudUIServer {
      * Load html page from asset folder
      * @return
      */
-    private String getViewSource() {
+    private String getViewSource(IHTTPSession session) {
         try {
+            String baseUrl = getBaseUrl(session); // get base url for further calls
+
             StringBuilder builder = new StringBuilder();
             BufferedReader reader = new BufferedReader(new InputStreamReader(mContext.getAssets().open("index.html")));
             String line = "";
+            String ipAddress = getIpAddress();
             while ((line = reader.readLine()) != null) {
-                line = line.replaceAll("###IP_ADDRESS###", getIpAddress());
+                line = line.replaceAll("###IP_ADDRESS###", ipAddress);
+                line = line.replaceAll("###BASE_URL###", baseUrl);
                 builder.append(line + '\n');
             }
             reader.close();
@@ -186,20 +179,6 @@ public class CuberiteUIServer extends MyCloudUIServer {
             Log.e(TAG, e.getMessage());
             return "<h1>Sorry index.html cannot be loaded</h1>";
         }
-    }
-
-    private Response makeResponse(String htmlContent) {
-        return newFixedLengthResponse(new Response.IStatus() {
-            @Override
-            public int getRequestStatus() {
-                return 200;
-            }
-
-            @Override
-            public String getDescription() {
-                return "OK";
-            }
-        }, MIME_HTML, htmlContent);
     }
 
     // Cuberite stuff
@@ -231,6 +210,10 @@ public class CuberiteUIServer extends MyCloudUIServer {
         editor.apply();
     }
 
+    /**
+     *  Returns the state of the Cuberite application
+     *  e.g. is Cuberite running, is the binary and the server settings installed, ...
+     */
     private State getState() {
         State state = null;
         boolean hasBinary = false;
@@ -258,6 +241,9 @@ public class CuberiteUIServer extends MyCloudUIServer {
         return state;
     }
 
+    /**
+     *  Is the CuberiteService running?
+     */
     private boolean isServiceRunning(Class<?> serviceClass) {
         ActivityManager manager = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
         for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
@@ -329,11 +315,11 @@ public class CuberiteUIServer extends MyCloudUIServer {
         Log.d(Tags.MAIN_ACTIVITY, "Starting cuberite");
         checkPermissions();
 
-        Intent cubserviceintent = new Intent(mContext, CuberiteService.class);
-        cubserviceintent.putExtra("location", preferences.getString("cuberiteLocation", ""));
-        cubserviceintent.putExtra("binary", PRIVATE_DIR + "/" + preferences.getString("executableName", ""));
-        cubserviceintent.putExtra("stopcommand", "stop");
-        cubserviceintent.putExtra("ip", getIpAddress());
+        Intent intent = new Intent(mContext, CuberiteService.class);
+        intent.putExtra("location", preferences.getString("cuberiteLocation", ""));
+        intent.putExtra("binary", PRIVATE_DIR + "/" + preferences.getString("executableName", ""));
+        intent.putExtra("stopcommand", "stop");
+        intent.putExtra("ip", getIpAddress());
         BroadcastReceiver callback = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -351,7 +337,7 @@ public class CuberiteUIServer extends MyCloudUIServer {
         };
         LocalBroadcastManager.getInstance(mContext).registerReceiver(callback, new IntentFilter("callback"));
         LocalBroadcastManager.getInstance(mContext).registerReceiver(addLog, new IntentFilter("addLog"));
-        mContext.startService(cubserviceintent);
+        mContext.startService(intent);
 
 //        int colorTo = ContextCompat.getColor(this, R.color.warning);
 //        animateColorChange(mainButton, mainButtonColor, colorTo, 500);
@@ -390,15 +376,6 @@ public class CuberiteUIServer extends MyCloudUIServer {
     }
 
     /*
-    *  Get logs from the Cuberite server
-    */
-    protected void doGetLog() {
-
-    }
-
-
-
-    /*
     *  Install the Cuberite server
     */
     protected void doInstall(State state) {
@@ -424,12 +401,6 @@ public class CuberiteUIServer extends MyCloudUIServer {
         }, new IntentFilter("InstallService.callback"));
         mContext.startService(intent);
     }
-
-    /*
-    *  Start the Cuberite server
-    */
-
-
 
     /*
     *  Get the MyCloud UserID.
