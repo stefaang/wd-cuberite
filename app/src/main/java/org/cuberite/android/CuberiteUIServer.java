@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
@@ -54,7 +55,7 @@ public class CuberiteUIServer extends MyCloudUIServer {
     private static final String ACCESS_TOKEN_NAME = "access_token";
     private static final int LIMIT = 1000;
     private static String serviceLogs = "";
-
+    private BroadcastReceiver addLog;
 
     public CuberiteUIServer(Context context) {
         super(context);
@@ -152,7 +153,7 @@ public class CuberiteUIServer extends MyCloudUIServer {
 
         }catch (Exception e) {
             Log.d(TAG, "##### POST handling exception " + e.getMessage());
-            return newFixedLengthResponse("<h1>Sorry, folder creation failed.</h1>");
+            return newFixedLengthResponse("{\"status\": \"FAILURE\"}");
         }
     }
 
@@ -328,15 +329,19 @@ public class CuberiteUIServer extends MyCloudUIServer {
                 checkState(); // Sets the start button color correctly
             }
         };
-        BroadcastReceiver addLog = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                Log.d(Tags.MAIN_ACTIVITY, "Get logs from Cuberite Service");
-                serviceLogs += intent.getStringExtra("message");
-            }
-        };
         LocalBroadcastManager.getInstance(mContext).registerReceiver(callback, new IntentFilter("callback"));
-        LocalBroadcastManager.getInstance(mContext).registerReceiver(addLog, new IntentFilter("addLog"));
+
+        if (this.addLog == null){
+            Log.d(Tags.MAIN_ACTIVITY, "Setup Cuberite logger addLog listener");
+            this.addLog = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    Log.d(Tags.MAIN_ACTIVITY, "Get logs from Cuberite Service");
+                    serviceLogs += intent.getStringExtra("message");
+                }
+            };
+            LocalBroadcastManager.getInstance(mContext).registerReceiver(addLog, new IntentFilter("addLog"));
+        }
         mContext.startService(intent);
 
 //        int colorTo = ContextCompat.getColor(this, R.color.warning);
@@ -356,6 +361,9 @@ public class CuberiteUIServer extends MyCloudUIServer {
     protected void doStop() {
         Log.d(Tags.MAIN_ACTIVITY, "Stopping Cuberite");
         LocalBroadcastManager.getInstance(mContext).sendBroadcast(new Intent("stop"));
+        if (this.addLog != null) {
+            LocalBroadcastManager.getInstance(mContext).unregisterReceiver(this.addLog);
+        }
 //        int colorTo = ContextCompat.getColor(this, R.color.danger);
 //        animateColorChange(mainButton, mainButtonColor, colorTo, 500);
 //        mainButton.setText(getText(R.string.do_kill_cuberite));
@@ -431,5 +439,10 @@ public class CuberiteUIServer extends MyCloudUIServer {
             return e.toString();
         }
         return null;
+    }
+
+    public static String getRootFolder(@NonNull Context context, @NonNull String myCloudUserId) {
+        String path = MyCloudUIServer.getRootFolder(context, myCloudUserId);
+        return (path.endsWith(File.separator)) ? path.substring(0, path.length() - 2) : path;
     }
 }

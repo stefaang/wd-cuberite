@@ -94,10 +94,13 @@ public class InstallService extends IntentService {
                 if(state == State.NEED_DOWNLOAD_BOTH) {
                     intent.putExtra("state", State.NEED_DOWNLOAD_SERVER.toString());
                     onHandleIntent(intent);
-                } else
+                } else {
                     LocalBroadcastManager.getInstance(this).sendBroadcast(new Intent("InstallService.callback"));
+                }
+                // Ensure the binary is in the private directory, otherwise it can't be executed
+                //copyBinary(new File(targetDirectory, executableName), new File(getFilesDir(), executableName));
 
-                // TODO: setup web admin
+                // Setup web admin
                 setupWebAdmin("admin", "admin");
                 break;
             }
@@ -255,7 +258,7 @@ public class InstallService extends IntentService {
                 final Ini ini;
                 if (!webadminFile.exists()) {
                     ini = new Ini();
-                    ini.put("WebAdmin", "Ports", 8080);
+                    ini.put("WebAdmin", "Ports", 48080);
                 } else {
                     ini = new Ini(webadminFile);
                 }
@@ -379,6 +382,29 @@ public class InstallService extends IntentService {
             return new String(hexResult).toLowerCase();
         } catch (Exception e) {
             return e.toString();
+        }
+    }
+
+    public static void copyBinary(File src, File dst) {
+        try {
+            InputStream in = new FileInputStream(src);
+            try {
+                OutputStream out = new FileOutputStream(dst);
+                try {
+                    // Transfer bytes from in to out
+                    byte[] buf = new byte[1024];
+                    int len;
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
+                    }
+                } finally {
+                    out.close();
+                }
+            } finally {
+                in.close();
+            }
+        } catch (IOException e) {
+            Log.e(Tags.INSTALL_SERVICE, "Failed to copy " + src + " to " + dst);
         }
     }
 }

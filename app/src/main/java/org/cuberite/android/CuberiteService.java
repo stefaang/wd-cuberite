@@ -43,7 +43,7 @@ public class CuberiteService extends IntentService {
             logLine += "<br>" + curText;
         }
         Log.w(Tags.SERVICE, logLine);
-        log += logLine;
+        //log += logLine;
         Intent intent = new Intent("addLog");
         intent.putExtra("message", logLine);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
@@ -58,7 +58,7 @@ public class CuberiteService extends IntentService {
         final String location = intent.getStringExtra("location");
         CharSequence text = getText(R.string.notification_cuberite_running);
 
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
+        //PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
 //        Notification notification = new NotificationCompat.Builder(this)
 //                .setSmallIcon(R.mipmap.ic_shape)
 //                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher))
@@ -99,14 +99,14 @@ public class CuberiteService extends IntentService {
             }).start();
 
             // Communication with the activity
-            BroadcastReceiver getLog = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    Intent sendIntent = new Intent("fullLog");
-                    sendIntent.putExtra("message", log);
-                    LocalBroadcastManager.getInstance(context).sendBroadcast(sendIntent);
-                }
-            };
+//            BroadcastReceiver getLog = new BroadcastReceiver() {
+//                @Override
+//                public void onReceive(Context context, Intent intent) {
+//                    Intent sendIntent = new Intent("fullLog");
+//                    sendIntent.putExtra("message", log);
+//                    LocalBroadcastManager.getInstance(context).sendBroadcast(sendIntent);
+//                }
+//            };
             BroadcastReceiver stop = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -135,7 +135,7 @@ public class CuberiteService extends IntentService {
                         Log.e(Tags.SERVICE, "An error occurred when writing " + line + " to the STDIN", e);}
                 }
             };
-            LocalBroadcastManager.getInstance(this).registerReceiver(getLog, new IntentFilter("getLog"));
+            //LocalBroadcastManager.getInstance(this).registerReceiver(getLog, new IntentFilter("getLog"));
             LocalBroadcastManager.getInstance(this).registerReceiver(stop, new IntentFilter("stop"));
             LocalBroadcastManager.getInstance(this).registerReceiver(kill, new IntentFilter("kill"));
             LocalBroadcastManager.getInstance(this).registerReceiver(executeLine, new IntentFilter("executeLine"));
@@ -143,7 +143,7 @@ public class CuberiteService extends IntentService {
             // Wait for the process to end. Logic waits here until cuberite has stopped. Everything after that is cleanup for the next run
             process.waitFor();
 
-            LocalBroadcastManager.getInstance(this).unregisterReceiver(getLog);
+            //LocalBroadcastManager.getInstance(this).unregisterReceiver(getLog);
             LocalBroadcastManager.getInstance(this).unregisterReceiver(stop);
             LocalBroadcastManager.getInstance(this).unregisterReceiver(kill);
             LocalBroadcastManager.getInstance(this).unregisterReceiver(executeLine);
